@@ -135,3 +135,21 @@ isr_stub_common:
     pop  rax
     add  rsp, 16                        ; drop vector + error code
     iretq                               ; rip, cs, rflags, rsp, ss
+
+; ---------------------------------------------------------------------
+;  Vector pointer table for idt.c (0..255).  Vectors >= 48 point at the
+;  common stub (rarely used; ring-3 syscalls use syscall not IDT).
+; ---------------------------------------------------------------------
+section .rodata
+align 8
+global isr_stub_table
+isr_stub_table:
+    dq isr0, isr1, isr2, isr3, isr4, isr5, isr6, isr7
+    dq isr8, isr9, isr10, isr11, isr12, isr13, isr14, isr15
+    dq isr16, isr17, isr18, isr19, isr20, isr21, isr22, isr23
+    dq isr24, isr25, isr26, isr27, isr28, isr29, isr30, isr31
+    dq isr32, isr33, isr34, isr35, isr36, isr37, isr38, isr39
+    dq isr40, isr41, isr42, isr43, isr44, isr45, isr46, isr47
+%rep (256 - 48 )
+    dq isr_stub_common
+%endrep
