@@ -20,7 +20,7 @@
 #include "string.h"
 #include "printk.h"
 #include "idt.h"
-#include "audio.h"
+#include "keyboard.h"
 
 #define SET_TABS 5
 #define SET_COLS 56
@@ -298,7 +298,7 @@ static void settings_open(struct window *win)
     audio_set_volume(100);
 }
 
-static const struct app app_settings = {
+const struct app app_settings = {
     .name  = "settings",
     .open  = settings_open,
     .paint = settings_paint,

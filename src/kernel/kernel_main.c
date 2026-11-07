@@ -19,6 +19,7 @@
 #include "string.h"
 #include "auth.h"
 #include "themes.h"
+#include "app.h"
 #include "wallpaper.h"
 #include "audio.h"
 

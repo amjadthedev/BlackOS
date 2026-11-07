@@ -8,6 +8,7 @@
  * ========================================================================== */
 #include "syscall.h"
 #include "win.h"
+#include "app.h"
 #include "idt.h"
 #include "pmm.h"
 #include "paging.h"
@@ -17,6 +18,7 @@
 #include "vfs.h"
 #include "string.h"
 #include "io.h"
+#include "console.h"
 #include "printk.h"
 #include "linux.h"
 
@@ -70,6 +72,7 @@ int sys_task_get(u32 index, struct sys_task *out)
 
 /* ───────────────────────────── MSR programming ─────────────────────────── */
 extern void syscall_entry(void);        /* src/kernel/syscall.s              */
+extern u64 syscall_run_user(u64 rip, u64 user_rsp); /* syscall.c helper        */
 void syscall_finish_user(u64 exit_code);/* src/kernel/syscall.s              */
 
 #define MSR_EFER        0xC0000080
@@ -142,7 +145,7 @@ u64 syscall_run_task(const void *blob, u64 blob_len, u64 entry_off,
     }
 
     /* run to completion (cooperative: sys_exit rewinds here)               */
-    u64 exit_code = asm_run_user(code_va + run_off, user_rsp);
+    u64 exit_code = syscall_run_user(code_va + run_off, user_rsp);
 
     pmm_free_run(stack_phys, 1);
     pmm_free_run(code_phys, 1);
@@ -259,8 +262,7 @@ u64 syscall_dispatch(u64 nr, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5)
             int n = net_http_read(c, buf + got, (u32)(cap - 1 - got));
             if (n > 0)
                 got += (u64)n;
-            else if (c->state == NET_TCP_CLOSED)
-                break;
+            else break;
             for (volatile int s = 0; s < 2048; s++)
                 ;
         }

@@ -23,6 +23,9 @@ void browser_css_apply(const char *text, int len);
 int  browser_zoom(int delta_px);
 void browser_navigate_panel_back(void);
 void browser_navigate_panel_forward(void);
+void browser_navigate_back(void);
+void browser_navigate_forward(void);
+void browser_navigate_reload(void);
 
 /* Tab management */
 void browser_new_tab(void);

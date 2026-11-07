@@ -14,6 +14,7 @@
 #include "string.h"
 #include "printk.h"
 #include "idt.h"
+#include "keyboard.h"
 #include "fb.h"
 #include "themes.h"
 #include "browser.h"
@@ -288,7 +289,7 @@ static void browse_fetch(struct browser_state *s)
         int n = net_http_read(c, s->resp + got, BROWSE_BUF - got);
         if (n > 0) {
             got += (u32)n;
-        } else if (c->state == NET_TCP_CLOSED) {
+        } else {
             break;
         }
         for (volatile int k = 0; k < 2048; k++);
@@ -296,8 +297,9 @@ static void browse_fetch(struct browser_state *s)
     net_http_close(c);
     s->resp[got] = '\0';
     s->resp_len = got;
+    if (got > 0) s->fetched = 1;
 
-    char *body = strstr_bs(s->resp, "\r\n\r\n");
+    const char *body = strstr_bs(s->resp, "\r\n\r\n");
     if (body) {
         body += 4;
         u32 blen = (u32)strlen(body);
@@ -460,7 +462,7 @@ static void browser_fallback_key(struct window *win, char c)
     }
 }
 
-static const struct app app_browser_fallback = {
+const struct app app_browser_fallback = {
     .name  = "browser-fallback",
     .open  = browser_fallback_open,
     .paint = browser_fallback_paint,

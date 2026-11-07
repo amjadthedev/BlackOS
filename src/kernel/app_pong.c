@@ -7,6 +7,8 @@
 #include "app.h"
 #include "win.h"
 #include "ui.h"
+#include "themes.h"
+#include "keyboard.h"
 #include "font.h"
 #include "pmm.h"
 #include "string.h"
@@ -26,6 +28,13 @@ static struct pong_state *pn_of(struct window *win)
     return (struct pong_state *)win->priv;
 }
 
+static void pong_serve(struct pong_state *p)
+{
+    p->px = 0; p->py = 0;
+    p->vx = (p->lscore > p->rscore) ? -200 : 200;
+    p->vy = 100;
+}
+
 static void pong_reset(struct pong_state *p)
 {
     p->px = 0; p->py = 0;
@@ -35,13 +44,6 @@ static void pong_reset(struct pong_state *p)
     p->over = 0;
     p->last_move = uptime_ms;
     pong_serve(p);
-}
-
-static void pong_serve(struct pong_state *p)
-{
-    p->px = 0; p->py = 0;
-    p->vx = (p->lscore > p->rscore) ? -200 : 200;
-    p->vy = 100;
 }
 
 static void pong_paint(struct window *win, u32 *buf, int w, int h)
@@ -107,7 +109,7 @@ static void pong_open(struct window *win)
     pong_reset(p);
 }
 
-static const struct app app_pong = {
+const struct app app_pong = {
     .name  = "pong",
     .open  = pong_open,
     .paint = pong_paint,

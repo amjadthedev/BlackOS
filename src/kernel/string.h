@@ -15,5 +15,7 @@ char  *strstr(const char *haystack, const char *needle);
 void  *memset(void *dst, int byte, usize len);
 void  *memcpy(void *dst, const void *src, usize len);
 void  *memmove(void *dst, const void *src, usize len);
+char  *strcpy(char *dst, const char *src);
+char  *strrchr(const char *s, int c);
 
 #endif /* BLACKOS_STRING_H */

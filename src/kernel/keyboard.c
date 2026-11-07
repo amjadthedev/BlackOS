@@ -76,8 +76,6 @@ int keyboard_pop(char *out)
 
 static void translate(u8 sc)
 {
-static void translate(u8 sc)
-{
     /* Handle prefix escapes (0xE0 for extended keys: arrows, etc.). */
     if (sc == 0xE0) {
         escaped = 1;

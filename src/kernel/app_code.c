@@ -17,6 +17,7 @@
 #include "idt.h"
 #include "themes.h"
 #include "paging.h"
+#include "string.h"
 
 #define CODE_MAX_LINES  60
 #define CODE_COLS       90
@@ -326,7 +327,7 @@ static void code_open(struct window *win)
     s->lines[0][0] = '\0';
 }
 
-static const struct app app_code = {
+const struct app app_code = {
     .name  = "code editor",
     .open  = code_open,
     .paint = code_paint,

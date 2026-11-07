@@ -103,7 +103,7 @@ static void exp_open(struct window *win)
     for (const char *s = welcome; *s; s++) exp_puts_char(e, *s);
 }
 
-static const struct app app_explorer = {
+const struct app app_explorer = {
     .name  = "explorer",
     .open  = exp_open,
     .paint = exp_paint,

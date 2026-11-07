@@ -4,8 +4,8 @@
 #ifndef BLACKOS_APP_H
 #define BLACKOS_APP_H
 
+#include "types.h"
 struct window;                          /* defined in win.h */
-
 /* Every GUI program is a pure callback struct: the compositor owns the
  * event pump and the chrome; the app renders into window->buf and reacts
  * to single keys.  Per-instance state hangs off window->priv.              */
@@ -31,6 +31,8 @@ extern const struct app app_youtube;
 extern const struct app app_snake;
 extern const struct app app_pong;
 extern const struct app app_code;
+extern const struct app app_calc;
+extern const struct app app_generic;
 
 extern const struct app *const apps[];
 extern const int app_count;

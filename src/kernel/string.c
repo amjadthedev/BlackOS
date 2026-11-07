@@ -82,6 +82,24 @@ char *strstr(const char *haystack, const char *needle)
     return (char *)0;
 }
 
+char *strcpy(char *dst, const char *src)
+{
+    char *ret = dst;
+    while ((*dst++ = *src++));
+    return ret;
+}
+
+char *strrchr(const char *s, int c)
+{
+    const char *last = 0;
+    while (*s) {
+        if (*s == (char)c) last = s;
+        s++;
+    }
+    if (c == '\0') last = s;
+    return (char *)last;
+}
+
 void *memmove(void *dst, const void *src, usize len)
 {
     u8 *d = (u8 *)dst;

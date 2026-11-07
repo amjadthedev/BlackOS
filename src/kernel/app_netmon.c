@@ -9,6 +9,7 @@
 #include "syscall.h"
 #include "string.h"
 #include "pmm.h"
+#include "netstack.h"
 
 #define NM_COLS   60
 #define NM_ROWS   18
@@ -51,10 +52,8 @@ static void nm_key(struct window *win, char c)
     if (c == 'f' || c == 'F') {
         /* toggle the firewall allow-everything rule */
         u8 any[4] = { 0, 0, 0, 0 };
-        if (net_firewall_add(FW_DIR_IN, FW_ALLOW, 0, any, 0, 0) >= 0)
-            ui_text(buf, w, h, 80, 72, "FW: allow in ", UI_ACCENT_GREEN, 1, 0);
-        else
-            ui_text(buf, w, h, 80, 72, "FW: deny in  ", UI_ACCENT_RED, 1, 0);
+        net_firewall_add(FW_DIR_IN, FW_ALLOW, 0, any, 0, 0);
+        s->selected = 1;
     }
     if (c == 0x1b) { ESC: s->selected = -1; }
 }
@@ -67,7 +66,7 @@ static void nm_open(struct window *win)
     s->selected = 0;
 }
 
-static const struct app app_netmon = {
+const struct app app_netmon = {
     .name  = "netmon",
     .open  = nm_open,
     .paint = nm_paint,

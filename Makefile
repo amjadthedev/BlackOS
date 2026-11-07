@@ -54,17 +54,39 @@ LDFLAGS := -T linker.ld -nostdlib -no-pie \
            -Wl,--build-id=none \
            -Wl,-z,max-page-size=0x1000
 
+# CONFIG_TOOLCHAIN: prioritize PC-native toolchains. If unset, fall back to
+# environment overrides in scripts/run.sh.
 KSRC  := $(wildcard src/kernel/*.c)
 KOBJ  := $(patsubst src/kernel/%.c,$(BUILD)/kernel/%.o,$(KSRC))
+
+# Build-time toolchain guidance if a required binary is missing
+CHECK_TOOLCHAIN := $(shell command -v nasm >/dev/null 2>&1 && command -v $(subst gcc,objcopy,$(CC)) >/dev/null 2>&1 && echo OK)
+ifeq ($(CHECK_TOOLCHAIN),)
+$(warning *** Toolchain incomplete -- no nasm/gcc/x86_64 toolchain found)
+$(warning See README.md section "Toolchain setup")
+endif
 BOBJ  := $(BUILD)/boot/boot.o
+KASSRC := $(wildcard src/kernel/*.s)
+KASOBJ := $(patsubst src/kernel/%.s,$(BUILD)/kernel/%_asm.o,$(KASSRC))
+KOBJ := $(KOBJ) $(KASOBJ)
 OBJS  := $(BOBJ) $(KOBJ)
 
 .PHONY: all iso run nographic verify stage clean mrproper
+
+OBJS  := $(BOBJ) $(KOBJ)
 
 all: $(KERNEL_BIN)
 
 # ---- compile --------------------------------------------------------------
 $(BUILD)/boot/boot.o: src/boot/boot.s
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILD)/boot/boot.o: src/boot/boot.s
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILD)/kernel/%_asm.o: src/kernel/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 

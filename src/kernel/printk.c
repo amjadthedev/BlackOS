@@ -4,6 +4,7 @@
  *  audited from a script (scripts/verify.py).
  * ========================================================================== */
 #include "printk.h"
+#include <stdarg.h>
 #include "console.h"
 #include "vga.h"        /* vga_print_color: panic still paints TEXT fallback */
 #include "serial.h"

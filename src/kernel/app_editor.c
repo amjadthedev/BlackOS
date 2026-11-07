@@ -123,10 +123,9 @@ static void ed_open(struct window *win)
     struct ed_state *e = ed_state(win);
     memset(e, 0, sizeof(*e));
     e->cur_row = e->cur_col = 0;
-    ui_text(buf, w, h, 4, 4, "BLACK OS editor - press ENTER to save, ESC to cancel.", UI_TEXT_BRIGHT, 1, 0);
 }
 
-static const struct app app_editor = {
+const struct app app_editor = {
     .name  = "editor",
     .open  = ed_open,
     .paint = ed_paint,

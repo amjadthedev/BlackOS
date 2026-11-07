@@ -85,7 +85,7 @@ static void md_open(struct window *win)
     m->freq = 440;   /* A4 */
 }
 
-static const struct app app_media = {
+const struct app app_media = {
     .name  = "media",
     .open  = md_open,
     .paint = md_paint,

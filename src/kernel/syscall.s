@@ -21,7 +21,7 @@
 [bits 64]
 
 extern syscall_dispatch                 ; C, syscall.c
-extern syscall_kernel_rsp               ; C-visible BSS slot (next entry stack)
+; extern removed: defined below as a global label
 
 global syscall_entry
 global syscall_run_user
@@ -39,7 +39,7 @@ syscall_kstack_bottom:
 syscall_kstack_top:
 
 syscall_kernel_rsp:
-        resq 1                          /* current kernel RSP for syscall entry */
+        resq 1                          ; current kernel RSP for syscall entry
 
 syscall_saved_kernel_rsp:
         resq 1                          ; continuation rsp for run_user

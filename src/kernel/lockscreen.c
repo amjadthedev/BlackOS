@@ -20,6 +20,7 @@
 #include "netstack.h"
 #include "string.h"
 #include "idt.h"
+#include "io.h"
 
 /*───────────────────────────── drawing helpers ───────────────────────────────*/
 static void px_text(const char *s, int x, int y, int scale, u32 fg)

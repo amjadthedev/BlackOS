@@ -21,4 +21,7 @@ void kputs(const char *s);
 void __attribute__((noreturn, format(printf, 1, 2)))
 panic(const char *fmt, ...);
 
+/* Many kernel modules still call printk(): alias to kprintf. */
+#define printk(...) kprintf(__VA_ARGS__)
+
 #endif /* BLACKOS_PRINTK_H */

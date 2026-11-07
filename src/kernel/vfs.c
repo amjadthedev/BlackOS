@@ -370,7 +370,7 @@ int vfs_mount(vfs_handle mount_point, struct bdev *dev)
     if (dev == NULL || dev->read == NULL)
         return -1;
 
-    int rc = fat32_mount(dev, &nodes[mount_point]);
+    int rc = fat32_mount(dev, mount_point);
     if (rc == 0) {
         nodes[mount_point].flags |= VFS_FLAG_DIR;
         printk("[vfs ] mounted FAT32 volume under /%s\n", nodes[mount_point].name);

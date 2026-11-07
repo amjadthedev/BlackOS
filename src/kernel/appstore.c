@@ -19,8 +19,10 @@
 #include "idt.h"
 #include "themes.h"
 #include "fb.h"
+#include "netstack.h"
+#include "keyboard.h"
 
-#define STORE_MAX 12
+#define STORE_MAX 256
 
 struct store_item {
     char name[64];
@@ -112,15 +114,15 @@ static void store_seed_catalog(struct store_state *s)
 {
     s->count = 0;
     struct store_item *add = NULL;
-#define ADD(name, cat, desc, sz, url)                                         \
+#define ADD(N, C, D, S, U)                                                  \
     do {                                                                      \
         add = &s->items[s->count++];                                          \
         memset(add, 0, sizeof(*add));                                         \
-        strncpy(add->name, name, sizeof(add->name) - 1);                      \
-        strncpy(add->category, cat, sizeof(add->category) - 1);               \
-        strncpy(add->desc, desc, sizeof(add->desc) - 1);                      \
-        add->size = sz;                                                       \
-        strncpy(add->url, url, sizeof(add->url) - 1);                         \
+        strncpy(add->name, (N), sizeof(add->name) - 1);                       \
+        strncpy(add->category, (C), sizeof(add->category) - 1);               \
+        strncpy(add->desc, (D), sizeof(add->desc) - 1);                       \
+        add->size = (S);                                                      \
+        strncpy(add->url, (U), sizeof(add->url) - 1);                          \
     } while (0)
 
     ADD("Snake", "Games", "Classic snake game", 4096, "http://10.0.2.2/pkg/snake.pkg");
@@ -129,6 +131,47 @@ static void store_seed_catalog(struct store_state *s)
     ADD("Calc", "Productivity", "Calculator", 2048, "http://10.0.2.2/pkg/calc.pkg");
     ADD("Weather", "Utilities", "Live weather widget", 1024, "http://10.0.2.2/pkg/weather.pkg");
     ADD("Music", "Media", "Audio player stub", 8192, "http://10.0.2.2/pkg/music.pkg");
+    /* --- Additional generic Apps --- */
+    ADD("Calendar", "Productivity", "Monthly calendar view", 1024, "http://10.0.2.2/pkg/calendar.pkg");
+    ADD("Alarms", "Utilities", "Timers and alarms", 1024, "http://10.0.2.2/pkg/alarms.pkg");
+    ADD("Todo", "Productivity", "Todo list", 1024, "http://10.0.2.2/pkg/todo.pkg");
+    ADD("Files", "System", "File manager", 4096, "http://10.0.2.2/pkg/files.pkg");
+    ADD("Terminal2", "Developer", "Enhanced terminal", 4096, "http://10.0.2.2/pkg/terminal2.pkg");
+    ADD("Image", "Media", "Image viewer", 4096, "http://10.0.2.2/pkg/image.pkg");
+    ADD("Paint", "Graphics", "Simple paint board", 8192, "http://10.0.2.2/pkg/paint.pkg");
+    ADD("Video", "Media", "Video player", 16384, "http://10.0.2.2/pkg/video.pkg");
+    ADD("Webmail", "Communication", "Email client", 8192, "http://10.0.2.2/pkg/webmail.pkg");
+    ADD("Spreadsheet", "Productivity", "Data grid", 8192, "http://10.0.2.2/pkg/spreadsheet.pkg");
+    ADD("CalendarSync", "Productivity", "Sync calendar", 8192, "http://10.0.2.2/pkg/calendarsync.pkg");
+    ADD("Reader", "Media", "Ebook reader", 8192, "http://10.0.2.2/pkg/reader.pkg");
+    ADD("Logger", "Developer", "Log viewer", 4096, "http://10.0.2.2/pkg/logger.pkg");
+    ADD("SysInfo", "Utilities", "System info", 2048, "http://10.0.2.2/pkg/sysinfo.pkg");
+    ADD("FontViewer", "Graphics", "Font preview", 4096, "http://10.0.2.2/pkg/fontviewer.pkg");
+    ADD("ColorPick", "Graphics", "Color picker", 2048, "http://10.0.2.2/pkg/colorpick.pkg");
+    ADD("Monitor", "System", "Status monitor", 4096, "http://10.0.2.2/pkg/monitor.pkg");
+    ADD("FTP", "Network", "FTP client", 16384, "http://10.0.2.2/pkg/ftp.pkg");
+    ADD("SMTP", "Network", "Mail sender", 8192, "http://10.0.2.2/pkg/smtp.pkg");
+    ADD("NetworkMap", "Network", "Network topology", 8192, "http://10.0.2.2/pkg/networkmap.pkg");
+    /* --- Games --- */
+    ADD("Bricks", "Games", "Breakout-style", 8192, "http://10.0.2.2/pkg/bricks.pkg");
+    ADD("Jumper", "Games", "Platform jumper", 8192, "http://10.0.2.2/pkg/jumper.pkg");
+    ADD("Rush", "Racing", "Car rush", 16384, "http://10.0.2.2/pkg/rush.pkg");
+    ADD("Sprint", "Racing", "Car sprint", 16384, "http://10.0.2.2/pkg/sprint.pkg");
+    ADD("Puzzle", "Games", "2048 grid", 8192, "http://10.0.2.2/pkg/puzzle.pkg");
+    ADD("Minesweeper", "Games", "Minefield", 4096, "http://10.0.2.2/pkg/minesweeper.pkg");
+    ADD("Sudoku", "Games", "Sudoku", 8192, "http://10.0.2.2/pkg/sudoku.pkg");
+    ADD("Chess", "Board", "AI Chess", 32768, "http://10.0.2.2/pkg/chess.pkg");
+    ADD("Go", "Board", "Go board", 32768, "http://10.0.2.2/pkg/go.pkg");
+    ADD("Reversi", "Board", "Reversi board", 16384, "http://10.0.2.2/pkg/reversi.pkg");
+    ADD("Tetris", "Games", "Tetris", 16384, "http://10.0.2.2/pkg/tetris.pkg");
+    ADD("Arkanoid", "Games", "Arkanoid", 16384, "http://10.0.2.2/pkg/arkanoid.pkg");
+    ADD("Shooting", "Action", "Simple shooter", 16384, "http://10.0.2.2/pkg/shooting.pkg");
+    ADD("Roguelike", "RPG", "Dungeon crawling", 65536, "http://10.0.2.2/pkg/roguelike.pkg");
+    ADD("Chess960", "Board", "Variant chess", 32768, "http://10.0.2.2/pkg/chess960.pkg");
+    ADD("Bomber", "Action", "Bomberman-lite", 16384, "http://10.0.2.2/pkg/bomber.pkg");
+    ADD("Flappy", "Arcade", "Flying bird", 6144, "http://10.0.2.2/pkg/flappy.pkg");
+    ADD("Dino", "Arcade", "T-rex run", 6144, "http://10.0.2.2/pkg/dino.pkg");
+    ADD("Mahjong", "Board", "Mahjong solitaire", 32768, "http://10.0.2.2/pkg/mahjong.pkg");
 #undef ADD
 
     /* mark locally built-in apps as installed                               */
@@ -165,7 +208,7 @@ static void store_install(struct store_state *s, int idx)
         net_poll();
         int n = net_http_read(c, pkg_buf + got, sizeof(pkg_buf) - 1 - got);
         if (n > 0) got += (u32)n;
-        else if (c->state == NET_TCP_CLOSED) break;
+        else break;
         for (volatile int k = 0; k < 2048; k++);
     }
     net_http_close(c);
@@ -378,7 +421,7 @@ static void store_open(struct window *win)
     s->scroll = 0;
 }
 
-static const struct app app_store = {
+const struct app app_store = {
     .name  = "app store",
     .open  = store_open,
     .paint = store_paint,

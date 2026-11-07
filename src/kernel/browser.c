@@ -155,7 +155,10 @@ static void browser_key(struct window *win, char c)
             url_bar_focused = 0;
             if (url_bar_len > 0) {
                 char saved[256];
-                strcpy(saved, url_bar_buf);
+                /* guard against a source overstep */
+                int lim = (url_bar_len >= (int)sizeof(saved)) ? (int)sizeof(saved)-1 : url_bar_len;
+                memcpy(saved, url_bar_buf, lim);
+                saved[lim] = '\0';
                 browser_navigate_url(saved);
                 url_bar_len = 0;
                 url_bar_buf[0] = '\0';
@@ -701,6 +704,32 @@ static void browser_app_open(struct window *win)
 }
 
 /* =============================================================================
+ *  DOM data classes (Phase 1 placeholders for NetSurf-style rendering bridge)
+ * ========================================================================== */
+
+struct browser_dom_node {
+    char tag[16];
+    char text[96];
+    struct browser_dom_node *next;
+};
+
+struct browser_dom {
+    struct browser_dom_node *head;
+    int node_count;
+};
+
+static struct browser_dom *browser_alloc_dom(void)
+{
+    int size = 2 * 1024;
+    u64 frames = (size + PMM_PAGE_SIZE - 1) / PMM_PAGE_SIZE;
+    struct browser_dom *dom = (struct browser_dom *)(usize)pmm_alloc_run(frames);
+    if (dom == NULL)
+        return NULL;
+    memset(dom, 0, sizeof(*dom));
+    return dom;
+}
+
+/* =============================================================================
  *  JS / CSS hooks (Phase 1 support: stubs with safe extraction utilities)
  * ========================================================================== */
 
@@ -734,6 +763,14 @@ int browser_zoom(int delta_px)
 /* Back/forward within panels – convenience forwarding to history navigation. */
 void browser_navigate_panel_back(void) { browser_navigate_history(-1); }
 void browser_navigate_panel_forward(void) { browser_navigate_history(+1); }
+
+/* =============================================================================
+ *  Navigation cycle helpers
+ * ========================================================================== */
+
+void browser_navigate_back(void)  { browser_navigate_panel_back(); }
+void browser_navigate_forward(void){ browser_navigate_panel_forward(); }
+void browser_navigate_reload(void) { browser_refresh(); }
 
 const struct app app_browser = {
     .name  = "browser",

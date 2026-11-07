@@ -10,6 +10,7 @@
 #include "ui.h"
 #include "font.h"
 #include "netstack.h"
+#include "fb.h"
 #include "pmm.h"
 #include "string.h"
 #include "printk.h"
@@ -59,7 +60,7 @@ static void fetch_title(struct yt_state *s)
         int n = net_http_read(c, buf + got, YT_BUF - got);
         if (n > 0) {
             got += (u32)n;
-        } else if (c->state == NET_TCP_CLOSED) {
+        } else {
             break;
         }
         for (volatile int k = 0; k < 2048; k++)
@@ -186,7 +187,7 @@ static void yt_open(struct window *win)
     s->cursor = s->url_len;
 }
 
-static const struct app app_youtube = {
+const struct app app_youtube = {
     .name  = "youtube",
     .open  = yt_open,
     .paint = yt_paint,
