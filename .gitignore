@@ -1,0 +1,7 @@
+build/
+*.iso
+*.o
+*.obj
+*.exe
+*.img
+node_modules

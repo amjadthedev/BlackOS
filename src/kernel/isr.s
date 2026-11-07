@@ -1,0 +1,137 @@
+; =============================================================================
+;  Black OS - Phase 4: CPU exception + hardware-IRQ gate stubs (64-bit)
+;
+;  Stack contract at "interrupt_handler" entry (see struct isr_frame in idt.h):
+;      [r15][r14]...[rax][int_no][err][rip][cs][rflags][rsp][ss]
+;  * Exceptions without an error code first push a fake 0 so that every
+;    frame has identical shape after "add rsp, 16".
+;  * Error-code exceptions (#DF #TS #NP #SS #GP #PF #AC #CP #VC #SX) already
+;    have the code from the CPU; the stub only pushes the vector number.
+;  * The dispatcher RETURNS for IRQs (timer, keyboard) - the epilogue below
+;    restores registers and iretq's.  CPU exceptions never return: the C
+;    dispatcher panics and halts, so control never reaches the epilogue.
+; =============================================================================
+
+[bits 64]
+section .text
+
+global isr_stub_table
+extern interrupt_handler
+
+; ---------------------------------------------------------------------------
+; per-vector stub macros
+; ---------------------------------------------------------------------------
+%macro ISR_NOERR 1
+isr%1:
+    push qword 0                        ; placeholder error code
+    push qword %1                       ; vector number
+    jmp  isr_stub_common
+%endmacro
+
+%macro ISR_ERR 1
+isr%1:
+    push qword %1                       ; vector number (error code already
+    jmp  isr_stub_common                ;  on stack, pushed by the CPU)
+%endmacro
+
+; ---------------------------------------------------------------------------
+; CPU exceptions 0-31.  Vectors 8 (#DF), 10 (#TS), 11 (#NP), 12 (#SS),
+; 13 (#GP), 14 (#PF), 17 (#AC), 21 (#CP), 29 (#VC), 30 (#SX) carry an error
+; code; the rest do not.
+; ---------------------------------------------------------------------------
+ISR_NOERR 0
+ISR_NOERR 1
+ISR_NOERR 2
+ISR_NOERR 3
+ISR_NOERR 4
+ISR_NOERR 5
+ISR_NOERR 6
+ISR_NOERR 7
+ISR_ERR   8
+ISR_NOERR 9
+ISR_ERR   10
+ISR_ERR   11
+ISR_ERR   12
+ISR_ERR   13
+ISR_ERR   14
+ISR_NOERR 15
+ISR_NOERR 16
+ISR_ERR   17
+ISR_NOERR 18
+ISR_NOERR 19
+ISR_NOERR 20
+ISR_ERR   21
+ISR_NOERR 22
+ISR_NOERR 23
+ISR_NOERR 24
+ISR_NOERR 25
+ISR_NOERR 26
+ISR_NOERR 27
+ISR_NOERR 28
+ISR_NOERR 29
+ISR_NOERR 30
+ISR_NOERR 31
+
+; ---------------------------------------------------------------------------
+; Remapped hardware IRQs 0-15 -> vectors 32-47 (no error codes exist here)
+; ---------------------------------------------------------------------------
+ISR_NOERR 32
+ISR_NOERR 33
+ISR_NOERR 34
+ISR_NOERR 35
+ISR_NOERR 36
+ISR_NOERR 37
+ISR_NOERR 38
+ISR_NOERR 39
+ISR_NOERR 40
+ISR_NOERR 41
+ISR_NOERR 42
+ISR_NOERR 43
+ISR_NOERR 44
+ISR_NOERR 45
+ISR_NOERR 46
+ISR_NOERR 47
+
+; ---------------------------------------------------------------------------
+; Common body: save all GP registers, hand the frame to the C dispatcher,
+; then restore and return to whoever was interrupted.
+; ---------------------------------------------------------------------------
+isr_stub_common:
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push rbp
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+
+    cld                                 ; C code requires DF = 0
+    mov  rdi, rsp                       ; arg1: struct isr_frame *
+    call interrupt_handler
+
+    ; -- epilogue: replay the prologue in reverse ----------------------------
+    pop  r15
+    pop  r14
+    pop  r13
+    pop  r12
+    pop  r11
+    pop  r10
+    pop  r9
+    pop  r8
+    pop  rbp
+    pop  rdi
+    pop  rsi
+    pop  rdx
+    pop  rcx
+    pop  rbx
+    pop  rax
+    add  rsp, 16                        ; drop vector + error code
+    iretq                               ; rip, cs, rflags, rsp, ss

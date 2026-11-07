@@ -1,0 +1,24 @@
+# Bochs configuration for Black OS (equivalent of the QEMU harness).
+#
+#  Run:  bochs -q -f bochsrc.txt
+
+megs: 512
+
+# --- boot chain -------------------------------------------------------------
+boot: cdrom
+cpuid: x86_64=1, level=24, mmx=1, apic=1, sse4_2=1, aes=1
+cpu: count=1, ips=20000000
+
+# --- bootable optical drive -----------------------------------------------
+ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
+ata0-master: type=cdrom, path=blackos.iso, status=inserted
+
+# --- graphics + logging -----------------------------------------------------
+vga: extension=vbe
+vgaromimage: file=/usr/share/vgabios/vgabios.bin
+
+log: bochsout.txt
+mouse: enabled=0
+
+# Serial mirror for automated verification (same contract as QEMU run).
+com1: enabled=1, mode=file, dev=build/serial.log
