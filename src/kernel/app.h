@@ -37,6 +37,7 @@ extern const struct app app_notes;
 extern const struct app app_todo;
 extern const struct app app_terminal;
 extern const struct app app_clock;
+extern const struct app app_about;
 
 extern const struct app *const apps[];
 extern const int app_count;

@@ -48,7 +48,7 @@ CFLAGS := -std=gnu11 -m64 \
           -mcmodel=small \
           -O2 -g \
           -Wall -Wextra -Wno-unused-parameter \
-          -Isrc
+          -Isrc -Isrc/contrib
 
 LDFLAGS := -T linker.ld -nostdlib -no-pie \
            -Wl,--build-id=none \
@@ -94,9 +94,12 @@ $(BUILD)/kernel/%.o: src/kernel/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD)/contrib/%.o: src/contrib/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=gnu11 -m64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-ident -mno-red-zone -mcmodel=large -O2 -g -Wall -Wextra -Wno-unused-parameter -Isrc -Isrc/contrib -c $< -o $@
 # ---- link -----------------------------------------------------------------
 $(ELF): $(OBJS) linker.ld
-	$(CC) $(LDFLAGS) -o $@ $(OBJS)
+	$(CC) $(LDFLAGS) -lm -o $@ $(OBJS)
 
 $(KERNEL_BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@

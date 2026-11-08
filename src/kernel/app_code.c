@@ -302,6 +302,30 @@ static void code_key(struct window *win, char c)
         }
         return;
     }
+    if (c == 'O' || c == 'o') {
+        char path[128];
+        int k = 0;
+        path[k] = '/'; k++;
+        char *pn = "code"; while (*pn && k < 123) path[k++] = *pn++;
+        int v = s->line_count;
+        char rev[16]; int rv=0;
+        if (!v) rev[rv++]='0';
+        while (v>0) { rev[rv++] = '0'+v%10; v/=10; }
+        for (int j=0;j<rv/2;j++){ char t=rev[j]; rev[j]=rev[rv-1-j]; rev[rv-1-j]=t; }
+        rev[rv]=0;
+        pn=rev; while (*pn && k < 123) path[k++] = *pn++;
+        path[k]='.'; k++; path[k]='t'; k++; path[k]='x'; k++; path[k]='t'; k++; path[k]=0;
+        code_load_file(s, path);
+        return;
+    }
+    if (c == 'S' || c == 's') {
+        code_save_file(s);
+        return;
+    }
+    if (c == 'R' || c == 'r') {
+        code_run_file(win, s);
+        return;
+    }
     if (c >= 0x20 && s->cur_col < CODE_COLS - 1) {
         s->lines[s->cur_line][s->cur_col++] = c;
         s->lines[s->cur_line][s->cur_col] = '\0';

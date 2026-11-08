@@ -23,6 +23,7 @@ const struct app *const apps[] = {
     &app_todo,
     &app_terminal,
     &app_clock,
+    &app_about,
 };
 
 const int app_count = (int)(sizeof(apps) / sizeof(apps[0]));

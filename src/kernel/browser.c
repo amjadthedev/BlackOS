@@ -57,6 +57,7 @@ struct browser_window {
     int active_tab;               /* index of the active tab              */
     char tabs[8][256];            /* tab URLs (one per tab)                */
     char tab_titles[8][128];      /* tab titles (one per tab)             */
+    char body[4096];                /* cached HTML body (will share buffer) */
     char bookmarks_title[16][128]; /* bookmark display titles               */
     char downloads_name[8][128];   /* download display names                */
     int downloads_progress[8];     /* 0-100 download progress              */
@@ -83,6 +84,7 @@ static int url_bar_len;                 /* current length                  */
 
 /* Forward declarations */
 static void browser_open(struct window *win);
+extern void ctx_js_eval(const char *src, int len);
 static void browser_paint(struct window *win, u32 *buf, int w, int h);
 static void browser_key(struct window *win, char c);
 static void browser_close(struct window *win);
@@ -109,6 +111,7 @@ static void browser_open(struct window *win)
     g_browser.active_tab = 0;
     url_bar_focused = 0;
     url_bar_len = 0;
+    g_browser.body[0] = '\0';
     
     if (win->priv == NULL) {
         win->priv = &g_browser;
@@ -343,9 +346,26 @@ static void browser_draw_content(struct window *win, u32 *buf, int w, int h)
                 g_text_dim, 0, 0);
     }
     
-    /* Draw content placeholder (future: NetSurf rendering goes here) */
-    ui_text(buf, w, h, w/2 - 50, h/2, "Content area", g_text_dim, 0, 0);
-    ui_text(buf, w, h, w/2 - 50, h/2 + 12, "(NetSurf rendering)", g_text_dim, 0, 0);
+    /* Draw minimal-render HTML view (inline elements from last fetched document) */
+    /* Pull body content from g_browser fetched cache (when browser_navigate_url fills it) */
+    char *b = g_browser.body; // assuming a future struct field definition...
+    (void)b;
+    /* heuristics for simple <h1>..</h1>, <a>, <p> */
+    int x = 0, y = abx;
+    int line = 0;
+    const char *p = (g_browser.body ? g_browser.body : "Open an HTML page and press R to fetch it");
+    while (*p && line < 30) {
+        if (strstr(p, "<h1>") == p) { ui_text(buf, w, h, x+12, y + 18, "H1:", g_accent, 0,0); p += 4; ui_text(buf, w, h, x+36, y+18, p, g_text_bright, 0, 0); line++; continue; }
+        const char *next = strstr(p, "<a ");
+        if (next && next - p < 120) {
+            const char *href = strstr(next+1, "href="); 
+            ui_text(buf,w,h, x, y + 18*line, p, g_text_bright, 0, 0);
+            p = next + 1; line++; continue;
+        }
+        ui_text(buf, w, h, x, y + 18*line, p, g_text_bright, 0, 0);
+        line++;
+        break;
+    }
 }
 
 /* =============================================================================
@@ -760,11 +780,8 @@ void browser_js_eval(const char *src, int len)
 {
     if (src == NULL || len <= 0)
         return;
-    // Phase 1: freeze execution and log tags for later QuickJS/duktape wiring.
-    int count = 0;
-    for (int i = 0; i < len && i < 256; i++) if (src[i] == '<' && src[i+1] == 's' && src[i+2] == 'c' && src[i+3] == 'r')
-        count++;
-    (void)count;
+    // Phase 1: delegate to ctx_js stub (ready for duktape later)
+    ctx_js_eval(src, len);
 }
 
 void browser_css_apply(const char *text, int len)

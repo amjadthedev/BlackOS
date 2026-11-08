@@ -33,3 +33,20 @@ This project ships a complete freestanding x86-64 operating system with desktop,
 - File in repo gets published via GitHub once verified.
 
 For details per implementation, inspect `src/kernel/{filetype,css,pe,browser,app_store,keyboard,printk}.c`.
+
+## Open-source credits
+The following repositories/binaries are credited in `app_about.c` and referenced via filesystem behavior:
+- Fabrice Bellard — `bellard/quickjs`, also QEMU dev
+- Sami Vaarala — `svaarala/duktape`
+- Sean Barrett et al — `nothings/stb`
+- GRUB / multiboot specification maintainers — GNU
+- libburnia / xorriso authors project
+- Cygwin/MSYS2 maintainers
+- GCC/binutils developers
+- NetSurf / NetSurf project (integration planning)
+
+## Next pass (host)
+- `make clean && make iso && make verify` (locally)
+- Hyper-V: gen-1, secure-boot off, boot off DVD
+- `git push -u origin main`
+- iterate over the 'Browser' element, add `html`  to add actual reaction.
