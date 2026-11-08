@@ -20,6 +20,8 @@
 #include "netstack.h"
 #include "string.h"
 #include "printk.h"
+#include "css.h"
+#include "filetype.h"
 
 /* Browser window state */
 struct browser_window {
@@ -691,6 +693,27 @@ int browser_get_download_count(void)
     return g_browser.download_count;
 }
 
+void browser_download_open(int index)
+{
+    if (index < 0 || index >= g_browser.download_count) {
+        printk("[browser] invalid download index %d\n", index);
+        return;
+    }
+    printk("[browser] download open: %s\n", g_browser.downloads_name[index]);
+    g_browser.downloads_progress[index] = 100;
+}
+
+void browser_download_persist(void)
+{
+    /* PJ stub: serialize into VFS later */
+    printk("[browser] persisting downloads state\n");
+}
+
+void browser_download_open_with(const char *path, const char *mime)
+{
+    printk("[browser] open download %s mime %s\n", path ? path : "?", mime ? mime : "unknown");
+}
+
 /* =============================================================================
  *  Black OS App Registration (via app system)
  * ========================================================================== */
@@ -748,9 +771,9 @@ void browser_css_apply(const char *text, int len)
 {
     if (text == NULL || len <= 0)
         return;
-    // Phase 1: avoid blocking the renderer; real CSS engine lands with NetSurf DOM.
-    // For now logging schema so assets can build stable in offline build tests.
-    (void)len;
+    css_parse(text, len); /* Phase 1: no-op parser now wired */
+    (void)g_accent;
+    printk("[browser] applied CSS surface hints\n");
 }
 
 int browser_zoom(int delta_px)

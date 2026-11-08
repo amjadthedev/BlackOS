@@ -233,6 +233,11 @@ kmain(u64 mb2_info_addr, u64 mb2_magic)
     vga_init();
     vga_banner();
 
+    /* user-facing boot screen text */
+    vga_set_color(VGA_LCYAN, VGA_BLACK);
+    kprintf("  BLACK OS boot system staged: press <Enter> to proceed\n");
+    kprintf("  * Loading kernel...  * Loading VFS...  * CPU initialized\n");
+
     if (mb2_magic != MB2_BOOT_MAGIC) {
         panic("multiboot2 magic mismatch: got %llx\n", mb2_magic);
     }

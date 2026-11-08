@@ -20,6 +20,8 @@ const char *browser_get_status(void);
 /* JavaScript / CSS support (Phase 1: stub hooks) */
 void browser_js_eval(const char *src, int len);
 void browser_css_apply(const char *text, int len);
+void browser_download_persist(void);
+void browser_download_open_with(const char *path, const char *mime);
 int  browser_zoom(int delta_px);
 void browser_navigate_panel_back(void);
 void browser_navigate_panel_forward(void);
@@ -49,6 +51,7 @@ const char *browser_get_download_name(int index);
 int  browser_get_download_progress(int index);
 void browser_set_download_progress(int index, int pct);
 int  browser_get_download_count(void);
+void browser_download_open(int index);
 
 /* Browser app structure for Black OS app system */
 extern const struct app app_browser;

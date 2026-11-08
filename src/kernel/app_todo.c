@@ -27,8 +27,7 @@ static void td_ensure(struct todo_state *s)
 {
     if (s == NULL) return;
     if (s->count == 0) {
-        const char **items = (const char*[]) { "Walk the dog", "Buy milk", "Review PR", "Call mom", 0 };
-        /* Static strings always include a 0 terminators; build N slack */
+        /* Static strings */
         const char *def_items[] = { "Walk the dog", "Buy milk", "Review PR", "Call mom", NULL };
         int i = 0;
         while (i < 4) {
