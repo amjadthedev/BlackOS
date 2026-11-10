@@ -9,7 +9,7 @@
 #define PMM_PAGE_SIZE       4096ULL
 #define PMM_ADDR(fname)     ((fname) * PMM_PAGE_SIZE)
 
-void pmm_init(u64 mb2_info_addr);
+void pmm_init(u64 info_addr, u64 magic);
 
 /* Returns the physical address of a claimed frame, or 0 when out of memory. */
 u64  pmm_alloc(void);

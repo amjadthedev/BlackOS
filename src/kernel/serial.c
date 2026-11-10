@@ -13,6 +13,7 @@
 #define LSR(port)           ((port) + 5)
 
 #define LSR_THR_EMPTY       0x20
+#define LSR_DATA_READY      0x01
 
 void serial_init(void)
 {
@@ -42,4 +43,15 @@ void serial_write(const char *s)
 {
     while (*s)
         serial_putc(*s++);
+}
+
+/* Non-blocking receive: scripts/verify.py drives the shell over COM1, so the
+ * console reads typed bytes here as well as from the PS/2 keyboard.
+ * Returns 1 when *out holds a fresh byte, 0 when the FIFO is empty. */
+int serial_try_getc(char *out)
+{
+    if (!(inb(LSR(SERIAL_BASE)) & LSR_DATA_READY))
+        return 0;
+    *out = (char)inb(DATA(SERIAL_BASE));
+    return 1;
 }

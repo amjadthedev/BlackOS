@@ -73,15 +73,9 @@ OBJS  := $(BOBJ) $(KOBJ)
 
 .PHONY: all iso run nographic verify stage clean mrproper
 
-OBJS  := $(BOBJ) $(KOBJ)
-
 all: $(KERNEL_BIN)
 
 # ---- compile --------------------------------------------------------------
-$(BUILD)/boot/boot.o: src/boot/boot.s
-	@mkdir -p $(dir $@)
-	$(AS) $(ASFLAGS) $< -o $@
-
 $(BUILD)/boot/boot.o: src/boot/boot.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@

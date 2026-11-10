@@ -138,9 +138,10 @@ static void shell_execute(void)
         if (rc < 0)
             kprintf("[mmu ] map FAILED for %P\n", (void *)(usize)phys);
         else
-            kprintf("[mmu ] %P -> identical VA (%s)\n",
+            kprintf("[mmu ] mapped (2 MiB) %P -> identical VA [%s]\n",
                     (void *)(usize)phys,
-                    rc == 0 ? "new 2 MiB entry installed" : "already mapped");
+                    rc == 0 ? "new page-directory entry installed"
+                            : "already mapped");
     } else if (strcmp(cmd_buf, "gui") == 0) {
         kprintf("[sys ] switching to graphical shell...\n");
         console_use_fb();
@@ -226,7 +227,7 @@ static void shell_feed(char c)
 
 /* ------------------------------------------------------------------- boot --- */
 void __attribute__((noreturn))
-kmain(u64 mb2_info_addr, u64 mb2_magic)
+kmain(u64 mb_info_addr, u64 mb_magic)
 {
     serial_init();                       /* logs must start before the display */
 
@@ -238,21 +239,27 @@ kmain(u64 mb2_info_addr, u64 mb2_magic)
     kprintf("  BLACK OS boot system staged: press <Enter> to proceed\n");
     kprintf("  * Loading kernel...  * Loading VFS...  * CPU initialized\n");
 
-    if (mb2_magic != MB2_BOOT_MAGIC) {
-        panic("multiboot2 magic mismatch: got %llx\n", mb2_magic);
-    }
-    kprintf("[boot] multiboot2 loader magic OK (EAX = %llx)\n", mb2_magic);
-    kprintf("[boot] info structure at %llx (%llu bytes seen by loader)\n",
-            mb2_info_addr, mb2_info_addr);
+    /* Who booted us?  GRUB's `multiboot` command speaks Multiboot v1
+     * (EAX = 0x2BADB002, flat info at EBX); an MB2 loader reports
+     * 0x36D76289 with a tag list.  boot.s passes EAX straight through. */
+    if (mb_magic == MB1_BOOT_MAGIC)
+        kprintf("[boot] loader magic OK (multiboot v1, EAX = %llx)\n", mb_magic);
+    else if (mb_magic == MB2_BOOT_MAGIC)
+        kprintf("[boot] loader magic OK (multiboot v2, EAX = %llx)\n", mb_magic);
+    else
+        panic("unexpected loader boot magic: %llx\n", mb_magic);
+
+    kprintf("[boot] loader info structure at 0x%llx\n", mb_info_addr);
 
     /* Phase 4: exceptions + hardware interrupts. */
     keyboard_init();
     idt_init();
     pic_init();
+    sti();                              /* PIC remapped: safe to enable now */
     pit_init(1000);                      /* 1 ms tick feeding uptime_ms */
 
     /* Phase 5: physical memory + paging. */
-    pmm_init(mb2_info_addr);
+    pmm_init(mb_info_addr, mb_magic);
     pmm_stats();
     pmm_selftest();
     paging_report();
@@ -269,11 +276,18 @@ kmain(u64 mb2_info_addr, u64 mb2_magic)
     /* Success marker for scripts/verify.py (serial capture). */
     kputs("BLACKOS_BOOT_OK\n");
 
-    /* Interactive console. */
+    /* Interactive console: keystrokes arrive from the PS/2 keyboard (IRQ1)
+     * and from COM1 — scripts/verify.py drives the shell over serial.  The
+     * PIT tick (1 kHz) wakes us out of hlt() every millisecond, so polling
+     * the UART FIFO here is cheap and needs no UART IRQ. */
     vga_set_color(VGA_LCYAN, VGA_BLACK);
     keyboard_set_hook(shell_feed);
     shell_prompt();
 
-    for (;;)
+    for (;;) {
+        char c;
+        while (serial_try_getc(&c))
+            shell_feed(c);
         hlt();
+    }
 }

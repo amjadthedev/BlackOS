@@ -1,10 +1,12 @@
 ; =============================================================================
 ;  Black OS - Phase 1: Multiboot2 header + real-mode startup, long-mode entry
 ;
-;  * The Multiboot2 header lets GRUB (or any MB2 loader) recognise the kernel.
+;  * The MB1 (a.out kludge) header is what actually boots us: GRUB's
+;    i386-pc `multiboot` command loads the raw binary at 1 MiB and jumps to
+;    _start.  The Multiboot2 header is still embedded for MB2 loaders.
 ;  * GRUB enters us in 32-bit protected mode, paging OFF:
-;        EAX = 0x36D76289 (multiboot2 boot magic)
-;        EBX = physical address of the multiboot2 information structure
+;        EAX = 0x2BADB002 (multiboot v1 boot magic)   [0x36D76289 under MB2]
+;        EBX = physical address of the loader information structure
 ;  * We build page tables here, enable PAE + Long Mode (EFER.LME) + Paging,
 ;    load our own GDT, and perform the far jump into 64-bit code.
 ;  * Assembled with:  nasm -f elf64  (mixed 32/64-bit code is intentional)
@@ -22,8 +24,6 @@ extern kmain
 %define MB2_HDR_LEN      (mb2_header_end - mb2_header_start)
 %define MB2_CHECKSUM     (-(MB2_MAGIC + MB2_ARCH_I386 + MB2_HDR_LEN))
 
-%define MB2_BOOT_MAGIC   0x36D76289           ; value the loader leaves in EAX
-
 ; ---------------------------------------------------------------------------
 ; GDT selector values (see gdt64 below)
 ; ---------------------------------------------------------------------------
@@ -34,6 +34,30 @@ extern kmain
 
 section .multiboot_header
 align 8
+
+extern __data_end
+extern __kernel_end
+
+; ==========================================================
+; Multiboot v1 header — with a.out kludge so GRUB (multiboot)
+; loads the raw binary at the right VMA and jumps to _start.
+; Flags: bit 16 (a.out kludge) | bit 2 (video colour info) |
+;        bit 0 (memory map) | bit 1 (boot device).
+; ==========================================================
+mb1_header_start:
+        align 8
+        dd 0x1BADB002                      ; magic
+        dd 0x00010003                      ; flags: bits 0+1 + aout kludge (bit 16)
+        dd - (0x1BADB002 + 0x00010003)     ; checksum
+        dd mb1_header_start                ; header_addr
+        dd 0x00100000                      ; load_addr = 1 MiB
+        dd __data_end                      ; load_end_addr = end of code+data
+        dd __kernel_end                    ; bss_end_addr
+        dd _start                          ; entry_addr (32-bit code)
+        align 8
+mb1_header_end:
+
+; MB2 header retained for upstream compatibility
 mb2_header_start:
         dd  MB2_MAGIC                       ; magic
         dd  MB2_ARCH_I386                   ; architecture
@@ -65,6 +89,7 @@ align 16
 global _start
 _start:
         cli                                 ; interrupts off until the IDT is up
+        mov     esi, eax                    ; preserve the loader boot magic
         mov     esp, boot_stack_top         ; temporary boot stack
         xor     ebp, ebp                    ; terminate stack backtraces
         ; EBX = multiboot2 info physical pointer.
@@ -101,6 +126,7 @@ _start:
         ; page-dir: 512 entries of 2 MiB huge pages 0x00000000..0x3FFFFFFF
         mov     edi, pd_page_dir
         mov     eax, 0x00000083             ; flags P|W|PS, base = 0
+        mov     ecx, 512                    ; one entry per 2 MiB chunk
 .fill_page_dir:
         mov     [edi], eax                  ; low dword: base | flags
         add     eax, 0x00200000             ; next 2 MiB chunk
@@ -141,6 +167,22 @@ _start:
 ; ---------------------------------------------------------------------------
 ; 64-bit entry.  From here on: long mode, plain C calling convention.
 ; ---------------------------------------------------------------------------
+; ==========================================================================
+; PVH BOOT BINDING — x86-64 ELF note so QEMU's -kernel loader can run us
+; without GRUB / 32-bit ELF re-validation.
+; ==========================================================================
+%if 1
+section .boot
+align 4
+        dd 4                       ; namelen
+        dd 4                       ; descsz  (payload = _start)
+        dd 6                       ; type = XEN_ELFNOTE_PHYS32_ENTRY
+        db "Xen", 0                ; name
+        align 4
+        dd _start                  ; 32-bit entry (within 2 GiB)
+        dd 0                       ; cs (CS 0 means CS implied)
+%endif
+
 [bits 64]
 long_mode_entry:
         mov     ax, GDT_DATA64              ; refresh data selectors
@@ -153,8 +195,9 @@ long_mode_entry:
         mov     esp, boot_stack_top         ; reload the stack in long mode
         xor     ebp, ebp
 
-        mov     edi, ebx                    ; arg1: multiboot2 info (physical)
-        mov     esi, MB2_BOOT_MAGIC         ; arg2: boot magic (triple check)
+        mov     edi, ebx                    ; arg1: loader info structure (phys)
+        mov     esi, esi                    ; arg2: boot magic saved at _start
+                                            ;       (32-bit mov zero-extends)
         call    kmain                       ; extern from kernel_main.c
 
 .panic_halt:

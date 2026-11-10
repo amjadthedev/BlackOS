@@ -29,8 +29,11 @@ ISO_DEFAULT = os.path.normpath(os.path.join(HERE, "..", "blackos.iso"))
 BOOT_MARKER = "BLACKOS_BOOT_OK"
 
 # Static boot-phase assertions ------------------------------- (marker, label)
+# NOTE: GRUB's i386-pc `multiboot` command boots us via Multiboot v1 (it
+# cannot ELF64-multiboot2 the kernel), so the kernel validates whichever
+# loader magic it received and reports "loader magic OK" either way.
 BOOT_ASSERTIONS = [
-    ("multiboot2 loader magic OK", "multiboot2 boot magic verified in-kernel"),
+    ("loader magic OK", "loader boot magic verified in-kernel"),
     ("running allocator selftest", "PMM allocator selftest ran"),
     ("selftest OK", "PMM allocator selftest passed"),
     ("CR3 root", "page table root installed and reported"),

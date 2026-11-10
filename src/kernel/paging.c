@@ -42,7 +42,7 @@ void paging_report(void)
     kprintf("[mmu ] EFER.LME = %llu   EFER.LMA = %llu   (IA-32e mode)\n",
             (efer >> 8) & 1, (efer >> 10) & 1);
     kprintf("[mmu ] CR3 root: %P\n", (void *)(usize)cr3);
-    kprintf("[mmu ] static identity map: 0x0 - 0x3FFFFFFF (512 x 2 MiB)\n");
+    kprintf("[mmu ] static identity map: 0x0 - 0x3fffffff (512 x 2 MiB)\n");
 }
 
 int paging_map_2mb(u64 phys)

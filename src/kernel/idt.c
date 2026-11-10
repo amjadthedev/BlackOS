@@ -66,7 +66,9 @@ void idt_init(void)
     idtr.limit = sizeof(idt) - 1;
     idtr.base  = (u64)(usize)idt;
     __asm__ volatile ("lidt %0" : : "m"(idtr));
-    sti();                              /* gates are live: enable hardware */
+    /* NOTE: do NOT sti() here — the PIC is still identity-mapped
+     * (IRQ0..7 -> vectors 0x08..0x0F), so a timer tick would hit
+     * vector 0x08 = #DF.  Caller enables interrupts after pic_init(). */
 }
 
 /* ------------------------------------------------- exception diagnostics --- */

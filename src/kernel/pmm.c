@@ -16,6 +16,9 @@
 #define BITMAP_FRAMES   (1ULL << 18)
 #define BITMAP_BYTES    (BITMAP_FRAMES / 8)
 
+/* Managed window in bytes: 1 GiB, matching the boot.s identity map. */
+#define PMM_WINDOW      ((u64)BITMAP_FRAMES * PMM_PAGE_SIZE)
+
 static u8 bitmap[BITMAP_BYTES] __attribute__((aligned(PMM_PAGE_SIZE)));
 static u64 frames_total;    /* frames inside the managed window            */
 static u64 frames_free;     /* frames marked available in the bitmap       */
@@ -64,18 +67,10 @@ static void pmm_free_range(u64 addr, u64 len)
         bit_clear_mark_free(f);
 }
 
-void pmm_init(u64 mb2_info_addr)
+/* MB2 path: walk the multiboot2 tag list. */
+static void pmm_parse_mb2(u64 info_addr)
 {
-    frames_total = frames_free = frames_used = 0;
-
-    /* 1) Mark the entire managed window reserved, then turn regions loose. */
-    memset(bitmap, 0xFF, sizeof(bitmap));
-    frames_used = BITMAP_FRAMES;
-    frames_free = 0;
-    frames_total = BITMAP_FRAMES;
-
-    /* 2) Walk the multiboot2 tag list. */
-    const u8 *base = (const u8 *)(usize)mb2_info_addr;
+    const u8 *base = (const u8 *)(usize)info_addr;
     struct mb2_info *mb = (struct mb2_info *)base;
     const u8 *tag_addr = base + sizeof(struct mb2_info);
     const u8 *end_addr = base + mb->total_size;
@@ -116,6 +111,82 @@ void pmm_init(u64 mb2_info_addr)
         }
 
         tag_addr += mb2_tag_step(tag->size);
+    }
+}
+
+/* MB1 path (what GRUB's `multiboot` command actually gives us): a flat
+ * info structure with an e820-style map at mmap_addr. */
+static void pmm_parse_mb1(u64 info_addr)
+{
+    const struct mb1_info *mb = (const struct mb1_info *)(usize)info_addr;
+    int have_map = 0;
+
+    if ((mb->flags & MB1_FLAG_MMAP) && mb->mmap_length) {
+        const u8 *p   = (const u8 *)(usize)mb->mmap_addr;
+        const u8 *end = p + mb->mmap_length;
+
+        while (p + sizeof(struct mb1_mmap_entry) <= end) {
+            const struct mb1_mmap_entry *e = (const struct mb1_mmap_entry *)p;
+            u32 step = e->size + (u32)sizeof(e->size);
+
+            if (step < sizeof(struct mb1_mmap_entry))
+                break;                       /* corrupt entry: stop here     */
+
+            if (e->type == MB1_MMAP_AVAILABLE && e->len) {
+                if (e->addr >= (1ULL << 30)) {
+                    ram_reported += e->len;  /* outside the managed window   */
+                } else {
+                    pmm_free_range(e->addr, e->len);
+                }
+            }
+            p += step;
+        }
+        have_map = 1;
+    }
+
+    if (!have_map && (mb->flags & MB1_FLAG_MEM)) {
+        /* No mmap buffer: mem_upper is the top of RAM above 1 MiB (in KiB). */
+        u64 top = 0x100000ULL + (u64)mb->mem_upper * 1024ULL;
+        if (top > PMM_WINDOW)
+            top = PMM_WINDOW;
+        if (top > 0x100000ULL)
+            pmm_free_range(0x100000ULL, top - 0x100000ULL);
+        ram_reported = ((u64)mb->mem_lower + (u64)mb->mem_upper) * 1024ULL;
+        have_map = 1;
+    }
+
+    if (!have_map)
+        kprintf("[pmm ] WARNING: MB1 info carries no RAM map (flags 0x%x)\n",
+                mb->flags);
+}
+
+void pmm_init(u64 info_addr, u64 magic)
+{
+    frames_total = frames_free = frames_used = 0;
+
+    /* 1) Mark the entire managed window reserved, then turn regions loose. */
+    memset(bitmap, 0xFF, sizeof(bitmap));
+    frames_used = BITMAP_FRAMES;
+    frames_free = 0;
+    frames_total = BITMAP_FRAMES;
+
+    /* 2) Ask the loader which RAM is actually available. */
+    if (magic == MB1_BOOT_MAGIC)
+        pmm_parse_mb1(info_addr);
+    else if (magic == MB2_BOOT_MAGIC)
+        pmm_parse_mb2(info_addr);
+    else
+        kprintf("[pmm ] WARNING: unknown loader magic %llx; RAM map unknown\n",
+                magic);
+
+    /* No usable entry at all: assume the identity-mapped window is RAM
+     * (the "no firmware map" sanity fallback), minus the reservations
+     * carved out below.  Keeps the pool usable instead of deadlocking
+     * every allocator on an empty bitmap. */
+    if (frames_free == 0) {
+        pmm_free_range(0x100000ULL, PMM_WINDOW - 0x100000ULL);
+        kprintf("[pmm ] no usable-RAM map from loader: assuming %llu MiB\n",
+                (u64)(PMM_WINDOW / 1024ULL / 1024ULL));
     }
 
     /* 3) Carve the permanent reservations back out of the pool:

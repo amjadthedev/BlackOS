@@ -13,4 +13,7 @@ void serial_init(void);
 void serial_putc(char c);
 void serial_write(const char *s);
 
+/* Polling receive: 1 = byte returned in *out, 0 = nothing pending. */
+int  serial_try_getc(char *out);
+
 #endif /* BLACKOS_SERIAL_H */

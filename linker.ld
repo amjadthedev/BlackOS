@@ -5,10 +5,10 @@
  *  places every PT_LOAD segment at its stated VMA; boot code identity-maps
  *  0x00000000-0x3FFFFFFF, so physical == virtual for the whole kernel.
  *
- *  Section order matters: the multiboot2 header must sit inside the first
- *  32 KiB of the loaded image, so it leads the file, boot stub second.
+ *  Section order matters: the Multiboot v1 header (a.out kludge) must sit
+ *  inside the first 8 KiB of the loaded image, so it leads the file — with
+ *  the Multiboot2 header right behind it — and the boot stub second.
  * ========================================================================== */
-
 OUTPUT_FORMAT(elf64-x86-64)
 OUTPUT_ARCH(i386:x86-64)
 ENTRY(_start)
@@ -47,6 +47,8 @@ SECTIONS
     {
         *(.data .data.*)
     }
+
+    __data_end = .;
 
     .bss : ALIGN(4096)
     {
