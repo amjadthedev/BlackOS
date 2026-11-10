@@ -1,6 +1,6 @@
 /* =============================================================================
-*  Black OS - css.h : tiny selector-rules parser (Phase 1 scaffold)
-* ========================================================================== */
+ *  Black OS - css.h : tiny selector-rules parser (style-strip + color match)
+ * ========================================================================== */
 #ifndef BLACKOS_CSS_H
 #define BLACKOS_CSS_H
 
@@ -15,8 +15,11 @@ struct css_rule {
 };
 
 void css_init(void);
-int  css_parse(const char *src, int len);int  css_rule_count(void);
+int  css_parse(const char *src, int len);
+int  css_rule_count(void);
 const struct css_rule *css_rule_at(int i);
 u32  css_match_color(const char *selector, u32 fallback);
+u32  css_match_color_prop(const char *selector, const char *property,
+                          u32 fallback);
 
 #endif /* BLACKOS_CSS_H */

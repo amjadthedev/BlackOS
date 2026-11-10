@@ -69,7 +69,8 @@ BOBJ  := $(BUILD)/boot/boot.o
 KASSRC := $(wildcard src/kernel/*.s)
 KASOBJ := $(patsubst src/kernel/%.s,$(BUILD)/kernel/%_asm.o,$(KASSRC))
 KOBJ := $(KOBJ) $(KASOBJ)
-OBJS  := $(BOBJ) $(KOBJ)
+CONTRIB := $(BUILD)/contrib/duktape.o
+OBJS  := $(BOBJ) $(KOBJ) $(CONTRIB)
 
 .PHONY: all iso run nographic verify stage clean mrproper
 
@@ -84,16 +85,21 @@ $(BUILD)/kernel/%_asm.o: src/kernel/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
+# Engine TUs (float-heavy) need SSE2; kernel core stays on soft-float ABI.
+$(BUILD)/kernel/libm.o:   CFLAGS += -msse2 -mfpmath=sse -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+$(BUILD)/kernel/kfmt.o:   CFLAGS += -msse2 -mfpmath=sse -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+$(BUILD)/kernel/ctx_js.o: CFLAGS += -msse2 -mfpmath=sse -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0
+
 $(BUILD)/kernel/%.o: src/kernel/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/contrib/%.o: src/contrib/%.c
+$(CONTRIB): src/contrib/duktape.c
 	@mkdir -p $(dir $@)
-	$(CC) -std=gnu11 -m64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-ident -mno-red-zone -mcmodel=large -O2 -g -Wall -Wextra -Wno-unused-parameter -Isrc -Isrc/contrib -c $< -o $@
+	$(CC) -std=gnu11 -m64 -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-ident -mno-red-zone -msse2 -mfpmath=sse -mcmodel=large -O2 -g -Wall -Wextra -Wno-unused-parameter -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Isrc -Isrc/contrib -c $< -o $@
 # ---- link -----------------------------------------------------------------
 $(ELF): $(OBJS) linker.ld
-	$(CC) $(LDFLAGS) -lm -o $@ $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(OBJS)
 
 $(KERNEL_BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@

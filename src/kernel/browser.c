@@ -22,6 +22,7 @@
 #include "printk.h"
 #include "css.h"
 #include "filetype.h"
+#include "idt.h"
 
 /* Browser window state */
 struct browser_window {
@@ -57,7 +58,7 @@ struct browser_window {
     int active_tab;               /* index of the active tab              */
     char tabs[8][256];            /* tab URLs (one per tab)                */
     char tab_titles[8][128];      /* tab titles (one per tab)             */
-    char body[4096];                /* cached HTML body (will share buffer) */
+    char body[4096];              /* stripped document text                */
     char bookmarks_title[16][128]; /* bookmark display titles               */
     char downloads_name[8][128];   /* download display names                */
     int downloads_progress[8];     /* 0-100 download progress              */
@@ -65,6 +66,26 @@ struct browser_window {
 
 static struct browser_window g_browser;
 static int g_browser_open = 0;
+
+/* --------------------------------------------------------------- fixtures -- */
+/* The built-in demo page.  2 CSS rules + a tiny JS snippet; enough for
+ * scripts/verify.py to confirm the engine pipeline actually runs. */
+static const char DEMO_CSS[] =
+    "body{color:#ff8800;background-color:#000012;}\n"
+    "p{color:#e0e0e0;}\n";
+
+static const char DEMO_HTML[] =
+    "<html><head>\n"
+    "<title>Black OS Demo</title>\n"
+    "<style>\n"
+    "body{color:#ff8800;background-color:#000012;}\n"
+    "p{color:#e0e0e0;}\n"
+    "</style>\n"
+    "<script>print(\"[js] js ok: \" + (6*7));</script>\n"
+    "</head><body>\n"
+    "<h1>Black OS Demo</h1>\n"
+    "<p>Hello, Black OS.</p>\n"
+    "</body></html>\n";
 
 /* Activate a tab by index (syncs url/title/status from the tab entry) */
 static void tab_activate(int idx)
@@ -84,7 +105,8 @@ static int url_bar_len;                 /* current length                  */
 
 /* Forward declarations */
 static void browser_open(struct window *win);
-extern void ctx_js_eval(const char *src, int len);
+extern int ctx_js_eval(const char *src, int len);
+extern int ctx_js_eval_string(const char *src);
 static void browser_paint(struct window *win, u32 *buf, int w, int h);
 static void browser_key(struct window *win, char c);
 static void browser_close(struct window *win);
@@ -268,6 +290,166 @@ static void browser_draw_tab_bar(struct window *win, u32 *buf, int w, int h)
     }
 }
 
+/* =============================================================================
+ *  Document pipeline: <title>/<style>/<script> extraction + body stripping
+ * ========================================================================== */
+
+/* Case-insensitive compare of the ASCII tag name in `t` (length `n`) */
+static int tag_eq(const char *t, int n, const char *want)
+{
+    int wlen = (int)strlen(want);
+    if (n != wlen) return 0;
+    for (int i = 0; i < n; i++) {
+        char c = t[i];
+        if (c >= 'A' && c <= 'Z') c += 32;
+        if (c != want[i]) return 0;
+    }
+    return 1;
+}
+
+/* Strip tags; returns offset past the last character written into `out`
+ * (out is NUL-terminated).  Skips <script>, <style> and <title> content. */
+static u32 strip_html_body(const char *html, u32 hlen, char *out, u32 cap)
+{
+    const char *p = html, *pend = html + hlen;
+    char *bp = out;
+
+    while (p < pend && (usize)(bp - out) < cap - 2) {
+        if (*p == '<') {
+            const char *gt = NULL;
+            for (const char *q = p; q < pend; q++) {
+                if (*q == '>') {
+                    gt = q;
+                    break;
+                }
+            }
+            if (!gt) {
+                p = pend;
+                break;
+            }
+            /* Peek the tag name */
+            const char *n = p + 1;
+            if (*n == '/') n++;
+            char tag[16];
+            int ti = 0;
+            const char *q = n;
+            while (q < gt && *q != ' ' && *q != '\t' && *q != '\n' &&
+                   ti < 15) {
+                char c = *q++;
+                if (c >= 'A' && c <= 'Z') c += 32;
+                tag[ti++] = c;
+            }
+            tag[ti] = '\0';
+
+            if (tag_eq(tag, ti, "script") || tag_eq(tag, ti, "style") ||
+                tag_eq(tag, ti, "title")) {
+                const char *close = NULL;
+                if (tag_eq(tag, ti, "script"))
+                    close = strstr(gt, "</script>");
+                else if (tag_eq(tag, ti, "style"))
+                    close = strstr(gt, "</style>");
+                else
+                    close = strstr(gt, "</title>");
+                p = close ? close + strlen(close) : pend;
+                continue;
+            }
+            p = gt + 1;
+            continue;
+        }
+        if (*p == '&') {           /* minimal entity decode */
+            if (strncmp(p, "&amp;", 5) == 0)  { *bp++ = '&'; p += 5; continue; }
+            if (strncmp(p, "&lt;", 4) == 0)   { *bp++ = '<'; p += 4; continue; }
+            if (strncmp(p, "&gt;", 4) == 0)   { *bp++ = '>'; p += 4; continue; }
+            if (strncmp(p, "&quot;", 6) == 0) { *bp++ = '"'; p += 6; continue; }
+            if (strncmp(p, "&#39;", 5) == 0)  { *bp++ = '\''; p += 5; continue; }
+            if (strncmp(p, "&nbsp;", 6) == 0) { *bp++ = ' '; p += 6; continue; }
+        }
+        *bp++ = *p++;
+    }
+    *bp = '\0';
+    return (u32)(bp - out);
+}
+
+/* Apply a full HTML document: extract title/style/script, strip body. */
+static void browser_load_document(const char *html, u32 len)
+{
+    memset(g_browser.body, 0, sizeof(g_browser.body));
+    g_browser.fetch_state = 2;
+    g_browser.title[0] = '\0';
+
+    if (!html || len == 0) {
+        strcpy(g_browser.body, "empty reply");
+        return;
+    }
+
+    /* <title> */
+    const char *t = strstr(html, "<title>");
+    if (t) {
+        const char *ts = t + 7;
+        const char *te = strstr(ts, "</title>");
+        if (te && te > ts) {
+            int tlen = te - ts;
+            if (tlen > (int)sizeof(g_browser.title) - 1)
+                tlen = sizeof(g_browser.title) - 1;
+            memcpy(g_browser.title, ts, tlen);
+            g_browser.title[tlen] = '\0';
+            strncpy(g_browser.tab_titles[g_browser.active_tab],
+                    g_browser.title, 127);
+            g_browser.tab_titles[g_browser.active_tab][127] = '\0';
+            kprintf("[web ] title: %s\n", g_browser.title);
+        }
+    }
+
+    /* <style> ... </style> */
+    const char *s = html;
+    while ((s = strstr(s, "<style>")) != NULL) {
+        const char *ss = s + 7;
+        const char *se = strstr(ss, "</style>");
+        if (se && se > ss)
+            browser_css_apply(ss, (int)(se - ss));
+        s = se ? se + 8 : s + 7;
+    }
+    u32 css_body = css_match_color("body", 0xE0E0E0);
+    kprintf("[web ] css rules: %d, body color: %08x\n",
+            css_rule_count(), css_body);
+
+    /* <script> ... </script> */
+    const char *q = html;
+    while ((q = strstr(q, "<script>")) != NULL) {
+        const char *qs = q + 8;
+        const char *qe = strstr(qs, "</script>");
+        if (qe && qe > qs)
+            browser_js_eval(qs, (int)(qe - qs));
+        q = qe ? qe + 9 : q + 8;
+    }
+
+    /* Body: strip tags and copy the visible text */
+    strip_html_body(html, len, g_browser.body, sizeof(g_browser.body));
+}
+
+/* Load the built-in demo page (used when offline, and by the webtest cmd). */
+void browser_load_demo(void)
+{
+    if (!g_browser_open) {
+        /* Open without a window so headless scripts can exercise the path. */
+        g_browser_open = 1;
+        g_browser.fetch_state = 0;
+        g_browser.panel_visible = 0;
+        g_browser.tab_count = 1;
+        g_browser.active_tab = 0;
+        g_browser.tabs[0][0] = '\0';
+        g_browser.tab_titles[0][0] = '\0';
+        url_bar_len = 0;
+        url_bar_buf[0] = '\0';
+    }
+    css_init();
+    g_browser.title[0] = '\0';
+    g_browser.body[0] = '\0';
+    g_browser.fetch_state = 1;
+
+    browser_load_document(DEMO_HTML, strlen(DEMO_HTML));
+}
+
 static void browser_draw_content(struct window *win, u32 *buf, int w, int h)
 {
     if (!g_browser_open) return;
@@ -346,25 +528,61 @@ static void browser_draw_content(struct window *win, u32 *buf, int w, int h)
                 g_text_dim, 0, 0);
     }
     
-    /* Draw minimal-render HTML view (inline elements from last fetched document) */
-    /* Pull body content from g_browser fetched cache (when browser_navigate_url fills it) */
-    char *b = g_browser.body; // assuming a future struct field definition...
-    (void)b;
-    /* heuristics for simple <h1>..</h1>, <a>, <p> */
-    int x = 0, y = abx;
-    int line = 0;
-    const char *p = (g_browser.body ? g_browser.body : "Open an HTML page and press R to fetch it");
-    while (*p && line < 30) {
-        if (strstr(p, "<h1>") == p) { ui_text(buf, w, h, x+12, y + 18, "H1:", g_accent, 0,0); p += 4; ui_text(buf, w, h, x+36, y+18, p, g_text_bright, 0, 0); line++; continue; }
-        const char *next = strstr(p, "<a ");
-        if (next && next - p < 120) {
-            const char *href = strstr(next+1, "href="); 
-            ui_text(buf,w,h, x, y + 18*line, p, g_text_bright, 0, 0);
-            p = next + 1; line++; continue;
+    /* Document surface: body's stripped text, line-wrapped */
+    /* Uses CSS: body color + body background (when <style> provided either) */
+    u32 surf = css_match_color_prop("body", "background-color", 0x0B0F1B);
+    u32 tcol = css_match_color("body", g_text_bright);
+    int content_y = (sh > 20) ? (sy + 30) : sy;
+    int line_h = 10;
+    int max_lines = (h - content_y - 4) / line_h;
+    if (max_lines < 1)
+        max_lines = 1;
+
+    /* Background surface */
+    ui_fill(buf, w, h, 0, content_y, w, h - content_y, surf);
+
+    const char *p = g_browser.body;
+    if (!*p)
+        p = "Open an HTML page (or press 'r') and it will render here.";
+
+    int ty = content_y + 4;
+    int max_cols = (w - 16) / 8;
+    if (max_cols < 8)
+        max_cols = 8;
+
+    for (int line = 0; line < max_lines && *p; line++) {
+        char linebuf[256];
+        int n = 0;
+        while (*p && *p != '\n' && n < max_cols - 1) {
+            linebuf[n++] = *p++;
+            if (n >= max_cols - 1)
+                break;
         }
-        ui_text(buf, w, h, x, y + 18*line, p, g_text_bright, 0, 0);
-        line++;
-        break;
+        linebuf[n] = '\0';
+        if (*p && *p != '\n' && n > 0) {
+            /* wrap: push remaining word to next line */
+            while (n > 0 && linebuf[n - 1] != ' ') {
+                n--;
+                p--;
+            }
+            if (n == 0) {
+                /* force-break */
+                p += max_cols;
+                n = max_cols - 1;
+            } else {
+                linebuf[n] = '\0';
+                while (*p == ' ')
+                    p++;
+            }
+        }
+        if (*p == '\n')
+            p++;
+        while (*p == ' ' || *p == '\r')
+            p++;
+
+        if (n > 0)
+            ui_text(buf, w, h, 8, ty, linebuf, tcol, 1, 0);
+        ty += line_h;
     }
 }
 
@@ -517,29 +735,95 @@ void browser_init(struct window *win)
 void browser_navigate_url(const char *url)
 {
     if (!g_browser_open) return;
-    
-    if (!url) {
+    if (!url)
         url = "http://example.com";
-    }
-    
+
     printk("[browser] Navigating to: %s\n", url);
-    
     if (strstr(url, "://") == NULL) {
         printk("[browser] Invalid URL: %s\n", url);
         return;
     }
-    
-    printk("[browser] Fetching page...\n");
-    printk("[browser] Network support: %s\n", 
-           net_dhcp_bound() ? "UP" : "DOWN");
-    
+
+    strncpy(g_browser.url, url, sizeof(g_browser.url) - 1);
+    g_browser.url[sizeof(g_browser.url) - 1] = '\0';
+    strncpy(g_browser.url_buffer, url, sizeof(g_browser.url_buffer) - 1);
+    g_browser.url_buffer[sizeof(g_browser.url_buffer) - 1] = '\0';
+    strncpy(url_bar_buf, url, sizeof(url_bar_buf) - 1);
+    url_bar_buf[sizeof(url_bar_buf) - 1] = '\0';
+    url_bar_len = strlen(url_bar_buf);
+    g_browser.fetch_state = 1;
+    g_browser.fetch_start = (u32)uptime_ms;
+    g_browser.title[0] = '\0';
+
     browser_add_history(url);
+
+    /* Fetch over the network when up, otherwise built-in demo page. */
+    if (net_dhcp_bound()) {
+        const char *scheme = strstr(url, "://");
+        const char *host = scheme + 3;
+        const char *slash = NULL;
+        {
+            const char *q = host;
+            while (*q) {
+                if (*q == '/') {
+                    slash = q;
+                    break;
+                }
+                q++;
+            }
+        }
+        char hbuf[256], path[256];
+        if (slash) {
+            int hl = (int)(slash - host);
+            if (hl >= (int)sizeof(hbuf)) hl = sizeof(hbuf) - 1;
+            strncpy(hbuf, host, hl);
+            hbuf[hl] = '\0';
+            strncpy(path, slash, sizeof(path) - 1);
+            path[sizeof(path) - 1] = '\0';
+        } else {
+            strncpy(hbuf, host, sizeof(hbuf) - 1);
+            hbuf[sizeof(hbuf) - 1] = '\0';
+            strcpy(path, "/");
+        }
+
+        printk("[browser] Fetching %s\n", url);
+        net_tcp_h c = net_http_get(hbuf, path);
+        if (c == NULL) {
+            printk("[browser] Network down; demo page loaded\n");
+            browser_load_demo();
+            return;
+        }
+
+        char body[2048];
+        u32 got = 0;
+        u32 deadline = (u32)uptime_ms + 8000;
+        while (got < sizeof(body) - 1 && uptime_ms < deadline) {
+            net_poll();
+            int n = net_http_read(c, body + got, sizeof(body) - 1 - got);
+            if (n > 0) {
+                got += (u32)n;
+                continue;
+            }
+            break;
+        }
+        net_http_close(c);
+        body[got] = '\0';
+
+        const char *http_body = strstr(body, "\r\n\r\n");
+        const char *doc = http_body ? http_body + 4 : body;
+        browser_load_document(doc, (u32)strlen(doc));
+        printk("[browser] Loaded %u bytes from %s\n", got, hbuf);
+        return;
+    }
+
+    browser_load_demo();
 }
 
 void browser_refresh(void)
 {
     if (!g_browser_open) return;
-    printk("[browser] Refresh requested\n");
+    printk("[browser] Refresh\n");
+    browser_navigate_url(g_browser.url);
 }
 
 const char *browser_get_status(void)
@@ -773,14 +1057,13 @@ static struct browser_dom *browser_alloc_dom(void)
 }
 
 /* =============================================================================
- *  JS / CSS hooks (Phase 1 support: stubs with safe extraction utilities)
+ *  JS / CSS hooks
  * ========================================================================== */
 
 void browser_js_eval(const char *src, int len)
 {
     if (src == NULL || len <= 0)
         return;
-    // Phase 1: delegate to ctx_js stub (ready for duktape later)
     ctx_js_eval(src, len);
 }
 
@@ -788,9 +1071,18 @@ void browser_css_apply(const char *text, int len)
 {
     if (text == NULL || len <= 0)
         return;
-    css_parse(text, len); /* Phase 1: no-op parser now wired */
-    (void)g_accent;
+    css_parse(text, len);
     printk("[browser] applied CSS surface hints\n");
+}
+
+/* Shell-test helper: run the CSS pipeline against the demo fixture. */
+void browser_css_test(void)
+{
+    css_init();
+    int n = css_parse(DEMO_CSS, strlen(DEMO_CSS));
+    u32 c = css_match_color("body", 0xE0E0E0);
+    printk("[css] parsed %d rules, body color: %08x\n", n, c);
+    (void)c;
 }
 
 int browser_zoom(int delta_px)

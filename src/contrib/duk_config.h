@@ -2924,12 +2924,19 @@ typedef struct duk_hthread duk_context;
 #undef DUK_USE_DATAPTR16
 #undef DUK_USE_DATAPTR_DEC16
 #undef DUK_USE_DATAPTR_ENC16
+/* Black OS: Date built-in is enabled with real wall time (CMOS RTC via
+ * gettimeofday) and UTC-only local time (no gmtime/mktime needed). */
 #define DUK_USE_DATE_BUILTIN
 #undef DUK_USE_DATE_FORMAT_STRING
-#undef DUK_USE_DATE_GET_LOCAL_TZOFFSET
+#undef DUK_USE_DATE_TZO_GMTIME_R
+#undef DUK_USE_DATE_TZO_GMTIME_S
+#undef DUK_USE_DATE_TZO_GMTIME
+#define DUK_USE_DATE_GET_LOCAL_TZOFFSET(d) 0
 #undef DUK_USE_DATE_GET_NOW
 #undef DUK_USE_DATE_PARSE_STRING
 #undef DUK_USE_DATE_PRS_GETDATE
+#undef DUK_USE_DATE_PRS_STRPTIME
+#undef DUK_USE_DATE_FMT_STRFTIME
 #undef DUK_USE_DEBUG
 #undef DUK_USE_DEBUGGER_DUMPHEAP
 #undef DUK_USE_DEBUGGER_INSPECT

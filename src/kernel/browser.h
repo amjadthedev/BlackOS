@@ -17,10 +17,12 @@ void browser_navigate_url(const char *url);
 void browser_refresh(void);
 const char *browser_get_status(void);
 
-/* JavaScript / CSS support (Phase 1: stub hooks) */
+/* JavaScript / CSS support */
 void browser_js_eval(const char *src, int len);
 void browser_css_apply(const char *text, int len);
 void browser_download_persist(void);
+void browser_load_demo(void);
+void browser_css_test(void);
 void browser_download_open_with(const char *path, const char *mime);
 int  browser_zoom(int delta_px);
 void browser_navigate_panel_back(void);

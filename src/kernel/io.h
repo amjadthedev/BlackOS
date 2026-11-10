@@ -58,17 +58,41 @@ static inline u64 read_cr0(void)
     return v;
 }
 
-static inline u64 read_cr3(void)
+static inline void write_cr0(u64 v)
 {
-    u64 v;
-    __asm__ volatile ("mov %%cr3, %0" : "=r"(v));
-    return v;
+    __asm__ volatile ("mov %0, %%cr0" : : "r"(v) : "memory");
 }
 
 static inline u64 read_cr4(void)
 {
     u64 v;
     __asm__ volatile ("mov %%cr4, %0" : "=r"(v));
+    return v;
+}
+
+static inline void write_cr4(u64 v)
+{
+    __asm__ volatile ("mov %0, %%cr4" : : "r"(v) : "memory");
+}
+
+/* SSE/x87 runtime: kernel code is built with -mno-sse, but Duktape is not
+ * (GCC refuses some of its float struct returns without SSE), so the CPU
+ * feature must be turned on before any JS runs.  No kernel code emits SSE,
+ * so leaving the unit idle outside JS evaluation is harmless. */
+static inline void cpu_enable_sse(void)
+{
+    u32 mxcsr = 0x1F80;                     /* default: all exceptions masked */
+
+    write_cr0(read_cr0() & ~((1ULL << 2) | (1ULL << 3)));  /* CR0.EM=0 TS=0  */
+    write_cr4(read_cr4() | (1ULL << 9) | (1ULL << 10));    /* FXSR | OSXMMEXCPT */
+    __asm__ volatile ("fninit");
+    __asm__ volatile ("ldmxcsr %0" : : "m"(mxcsr));
+}
+
+static inline u64 read_cr3(void)
+{
+    u64 v;
+    __asm__ volatile ("mov %%cr3, %0" : "=r"(v));
     return v;
 }
 

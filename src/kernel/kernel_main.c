@@ -22,8 +22,14 @@
 #include "app.h"
 #include "wallpaper.h"
 #include "audio.h"
+#include "browser.h"
 
 extern u8 __kernel_start[], __kernel_end[];
+
+#include "heap.h"            /* heap_init() */
+#include "io.h"              /* cpu_enable_sse() */
+extern void ctx_js_init(void);
+extern void ctx_js_destroy(void);
 
 extern void comp_run(void);
 extern void shell_launch_app(const struct app *a);
@@ -97,7 +103,9 @@ static void cmd_help(void)
             "  theme    cycle desktop theme\n"
             "  passwd   set account password\n"
             "  lock     show lock screen\n"
-            "  userrun  run userspace demo task\n");
+            "  userrun  run userspace demo task\n"
+            "  webtest  run browser engine self-test (JS + CSS)\n"
+            "  csstest  run CSS parser self-test\n");
 }
 
 static void shell_execute(void)
@@ -181,6 +189,11 @@ static void shell_execute(void)
         int next = (theme_active_index() + 1) % theme_count();
         apply_theme(next);
         kprintf("[sys ] theme: %s\n", theme_at(next)->name);
+    } else if (strcmp(cmd_buf, "webtest") == 0) {
+        kprintf("[webtest] launching browser engine self-test...\n");
+        browser_load_demo();
+    } else if (strcmp(cmd_buf, "csstest") == 0) {
+        browser_css_test();
     } else if (strcmp(cmd_buf, "passwd") == 0) {
         kprintf("[sys ] enter new password: ");
     } else if (strcmp(cmd_buf, "lock") == 0) {
@@ -263,6 +276,12 @@ kmain(u64 mb_info_addr, u64 mb_magic)
     pmm_stats();
     pmm_selftest();
     paging_report();
+
+    /* JS engine backing + heap for Duktape: PMM is ready by now. */
+    cpu_enable_sse();
+    heap_init();
+    css_init();
+    ctx_js_init();
 
     /* Phase 13: auth + shell theming + wallpaper                           */
     auth_init();

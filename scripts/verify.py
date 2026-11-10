@@ -47,6 +47,10 @@ CMD_ASSERTIONS = [
     ("uptime", "uptime:"),
     ("pmmtest", "selftest OK"),
     ("maptest", "mapped ("),
+    ("webtest", "js ok: 42"),
+    ("webtest", "title: Black OS Demo"),
+    ("webtest", "css rules:"),
+    ("csstest", "parsed"),
 ]
 
 
