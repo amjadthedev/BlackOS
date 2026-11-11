@@ -2,7 +2,8 @@
  *  Black OS - settings.c : Windows 11-inspired Settings app
  *
  *  Tabs: Display (theme / wallpaper), Network (DHCP + firewall),
- *        System (about / reboot / shutdown), Account (change password).
+ *        System (about / reboot / shutdown), Audio, Account, About
+ *        (third-party credits).
  *  Renders into its compositor window buffer; driven by keyboard arrows
  *  and Enter.
  * ========================================================================== */
@@ -27,7 +28,7 @@
 #define SET_COLS 56
 
 struct settings_state {
-    int tab;                 /* 0 Display, 1 Network, 2 System, 3 Audio, 4 Account */
+    int tab;                 /* 0 Display, 1 Network, 2 System, 3 Audio, 4 Account, 5 About */
     int volume;
     char new_pass[AUTH_PASS_MAX];
     int pass_len;
@@ -56,17 +57,15 @@ static void paint_tab_bar(struct settings_state *s, u32 *buf, int w, int h)
 {
     int y = 10;
     for (int i = 0; i < SET_TABS; i++) {
-        int x = 12 + i * 110;
+        int x = 12 + i * 82;
         int sel = (i == s->tab);
         u32 bg = sel ? g_btn_hover : 0x0F1B2E;
         u32 fg = sel ? g_text_bright : g_text_dim;
-        fb_fill_rect(x, y, 100, 26, bg);   /* direct FB-ish; we use buf below */
-        /* draw onto buf instead */
-        ui_fill(buf, w, h, x, y, 100, 26, bg);
-        ui_text(buf, w, h, x + 10, y + 9, tab_names[i], fg, 1, 0);
+        ui_fill(buf, w, h, x, y, 76, 26, bg);
+        ui_text(buf, w, h, x + 8, y + 9, tab_names[i], fg, 1, 0);
     }
     /* underline active tab */
-    ui_fill(buf, w, h, 12 + s->tab * 110, y + 26, 100, 2, g_accent);
+    ui_fill(buf, w, h, 12 + s->tab * 82, y + 26, 76, 2, g_accent);
 }
 
 static void paint_display(struct settings_state *s, u32 *buf, int w, int h)
@@ -156,40 +155,38 @@ static void paint_about(struct settings_state *s, u32 *buf, int w, int h)
     ui_text(buf, w, h, 12, y, "About", g_text_dim, 1, 0);
     y += 24;
 
-    ui_text(buf, w, h, 12, y, "Black OS", g_accent, 1, 0);
-    ui_text(buf, w, h, 160, y, "  v0.1", g_text_dim, 1, 0);
+    ui_text(buf, w, h, 12, y, "Black OS v0.1 (original work)", g_text_bright, 1, 0);
+    y += 24;
+    ui_text(buf, w, h, 12, y, "Third-party components:", g_text_dim, 1, 0);
+    y += 20;
+
+    ui_text(buf, w, h, 12, y, "Duktape 2.7.0 (MIT)", g_accent, 1, 0);
+    y += 16;
+    ui_text(buf, w, h, 24, y, "github.com/svaarala/duktape", g_text_dim, 1, 0);
+    y += 20;
+
+    ui_text(buf, w, h, 12, y, "stb_image v2.30 (public domain)", g_accent, 1, 0);
+    y += 16;
+    ui_text(buf, w, h, 24, y, "github.com/nothings/stb", g_text_dim, 1, 0);
+    y += 20;
+
+    ui_text(buf, w, h, 12, y, "GRUB 2.x (GPLv2+) - ISO loader", g_accent, 1, 0);
+    y += 16;
+    ui_text(buf, w, h, 24, y, "gnu.org/software/grub/", g_text_dim, 1, 0);
+    y += 20;
+
+    ui_text(buf, w, h, 12, y, "ACPI spec 6.5 + ACPICA (reference)", g_accent, 1, 0);
+    y += 16;
+    ui_text(buf, w, h, 24, y, "uefi.org/specs/ACPI/ acpica.org/", g_text_dim, 1, 0);
+    y += 20;
+
+    ui_text(buf, w, h, 12, y, "QEMU + OVMF (test only, not shipped)", g_accent, 1, 0);
+    y += 16;
+    ui_text(buf, w, h, 24, y, "qemu.org/ tianocore/edk2", g_text_dim, 1, 0);
     y += 24;
 
-    ui_text(buf, w, h, 12, y, "This is original code written for Black OS.", g_text_bright, 1, 0);
-    y += 24;
-    ui_text(buf, w, h, 12, y, "Third-party components used:", g_text_dim, 1, 0);
-    y += 24;
-
-    ui_text(buf, w, h, 12, y, "  Duktape (MIT)", g_accent, 1, 0);
-    ui_text(buf, w, h, 160, y, "https://github.com/svaarala/duktape", g_text_dim, 1, 0);
-    y += 24;
-
-    ui_text(buf, w, h, 12, y, "  stb_image (public domain)", g_accent, 1, 0);
-    ui_text(buf, w, h, 160, y, "https://github.com/nothings/stb", g_text_dim, 1, 0);
-    y += 24;
-
-    ui_text(buf, w, h, 12, y, "  GRUB 2.x (GPLv2+)", g_accent, 1, 0);
-    ui_text(buf, w, h, 160, y, "https://www.gnu.org/software/grub/", g_text_dim, 1, 0);
-    y += 24;
-
-    ui_text(buf, w, h, 12, y, "  xorriso (build-time only)", g_accent, 1, 0);
-    ui_text(buf, w, h, 160, y, "https://www.xorriso.org/", g_text_dim, 1, 0);
-    y += 24;
-
-    ui_text(buf, w, h, 12, y, "  ACPI spec 6.5 + ACPICA (reference)", g_accent, 1, 0);
-    ui_text(buf, w, h, 160, y, "https://uefi.org/specs/ACPI/ https://acpica.org/", g_text_dim, 1, 0);
-    y += 24;
-
-    ui_text(buf, w, h, 12, y, "  QEMU + OVMF (test only, never shipped)", g_accent, 1, 0);
-    ui_text(buf, w, h, 160, y, "https://www.qemu.org/ https://github.com/tianocore/edk2", g_text_dim, 1, 0);
-    y += 32;
-
-    ui_text(buf, w, h, 12, y, "Full license texts: see THIRD_PARTY_NOTICES.md", g_text_dim, 0, 0);
+    ui_text(buf, w, h, 12, y, "Full license texts: THIRD_PARTY_NOTICES.md",
+            g_accent, 1, 0);
     y += 24;
 
     if (s->msg[0] && uptime_ms - s->msg_ms < 3000)
