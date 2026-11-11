@@ -16,6 +16,7 @@
 #include "keyboard.h"
 #include "pmm.h"
 #include "paging.h"
+#include "acpi.h"
 #include "string.h"
 #include "auth.h"
 #include "themes.h"
@@ -85,7 +86,7 @@ static void cmd_help(void)
             "  uptime   elapsed seconds since boot\n"
             "  banner   redraw the BLACK OS splash\n"
             "  reboot   pulse the 8042 reset line\n"
-            "  halt     park the CPU (safe to power off)\n"
+            "  halt     ACPI power off (PM1a SLP_EN|TYP, QEMU fallback)\n"
             "  pmmtest  run PMM selftest\n"
             "  maptest  test dynamic 2 MiB mapping\n"
             "  gui      launch graphical desktop shell\n"
@@ -128,14 +129,13 @@ static void shell_execute(void)
     } else if (strcmp(cmd_buf, "banner") == 0) {
         vga_banner();
     } else if (strcmp(cmd_buf, "reboot") == 0) {
-        kprintf("[sys ] rebooting via 8042 pulse...\n");
-        io_wait();
-        outb(0x64, 0xFE);
+        kprintf("[sys ] rebooting via 8042 reset pulse...\n");
+        acpi_reboot();
         for (;;)
             hlt();
     } else if (strcmp(cmd_buf, "halt") == 0) {
         kprintf("[sys ] it is now safe to power off Black OS.\n");
-        cli();
+        acpi_poweroff();
         for (;;)
             hlt();
     } else if (strcmp(cmd_buf, "pmmtest") == 0) {
@@ -276,6 +276,7 @@ kmain(u64 mb_info_addr, u64 mb_magic)
     pmm_stats();
     pmm_selftest();
     paging_report();
+    acpi_init();                        /* find RSDP -> FADT -> _S5_        */
 
     /* JS engine backing + heap for Duktape: PMM is ready by now. */
     cpu_enable_sse();

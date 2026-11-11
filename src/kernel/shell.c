@@ -17,6 +17,7 @@
 #include "keyboard.h"
 #include "themes.h"
 #include "idt.h"
+#include "acpi.h"
 
 #define SHELL_TB_H          36          /* taskbar height, px                */
 #define SHELL_TB_ICONS      6           /* pinned app buttons                */
@@ -306,9 +307,7 @@ void shell_launch_app(const struct app *a)
 
 static void shell_power_off(void)
 {
-    /* ACPI PM1a control (QEMU: isa 0x604 port on modern; 0xB004 legacy)   */
-    outw(0x604, 0x2000);
-    outw(0xB004, 0x2000);
+    acpi_poweroff();
 }
 
 /*──────────────────────────── keyboard intake ────────────────────────────*/

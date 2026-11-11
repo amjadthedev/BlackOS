@@ -21,8 +21,9 @@
 #include "printk.h"
 #include "idt.h"
 #include "keyboard.h"
+#include "acpi.h"
 
-#define SET_TABS 5
+#define SET_TABS 6
 #define SET_COLS 56
 
 struct settings_state {
@@ -41,7 +42,7 @@ static struct settings_state *st_of(struct window *win)
 }
 
 static const char *tab_names[SET_TABS] = {
-    "Display", "Network", "System", "Audio", "Account"
+    "Display", "Network", "System", "Audio", "Account", "About"
 };
 
 static void set_msg(struct settings_state *s, const char *m)
@@ -149,6 +150,52 @@ static void paint_system(struct settings_state *s, u32 *buf, int w, int h)
         ui_text(buf, w, h, 12, h - 40, s->msg, g_accent, 1, 0);
 }
 
+static void paint_about(struct settings_state *s, u32 *buf, int w, int h)
+{
+    int y = 70;
+    ui_text(buf, w, h, 12, y, "About", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "Black OS", g_accent, 1, 0);
+    ui_text(buf, w, h, 160, y, "  v0.1", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "This is original code written for Black OS.", g_text_bright, 1, 0);
+    y += 24;
+    ui_text(buf, w, h, 12, y, "Third-party components used:", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "  Duktape (MIT)", g_accent, 1, 0);
+    ui_text(buf, w, h, 160, y, "https://github.com/svaarala/duktape", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "  stb_image (public domain)", g_accent, 1, 0);
+    ui_text(buf, w, h, 160, y, "https://github.com/nothings/stb", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "  GRUB 2.x (GPLv2+)", g_accent, 1, 0);
+    ui_text(buf, w, h, 160, y, "https://www.gnu.org/software/grub/", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "  xorriso (build-time only)", g_accent, 1, 0);
+    ui_text(buf, w, h, 160, y, "https://www.xorriso.org/", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "  ACPI spec 6.5 + ACPICA (reference)", g_accent, 1, 0);
+    ui_text(buf, w, h, 160, y, "https://uefi.org/specs/ACPI/ https://acpica.org/", g_text_dim, 1, 0);
+    y += 24;
+
+    ui_text(buf, w, h, 12, y, "  QEMU + OVMF (test only, never shipped)", g_accent, 1, 0);
+    ui_text(buf, w, h, 160, y, "https://www.qemu.org/ https://github.com/tianocore/edk2", g_text_dim, 1, 0);
+    y += 32;
+
+    ui_text(buf, w, h, 12, y, "Full license texts: see THIRD_PARTY_NOTICES.md", g_text_dim, 0, 0);
+    y += 24;
+
+    if (s->msg[0] && uptime_ms - s->msg_ms < 3000)
+        ui_text(buf, w, h, 12, h - 40, s->msg, g_accent, 1, 0);
+}
+
 static void paint_account(struct settings_state *s, u32 *buf, int w, int h)
 {
     int y = 70;
@@ -217,6 +264,7 @@ static void settings_paint(struct window *win, u32 *buf, int w, int h)
     case 2: paint_system(s, buf, w, h); break;
     case 3: paint_audio(s, buf, w, h); break;
     case 4: paint_account(s, buf, w, h); break;
+    case 5: paint_about(s, buf, w, h); break;
     }
 }
 
@@ -225,7 +273,7 @@ static void settings_key(struct window *win, char c)
     struct settings_state *s = st_of(win);
     if (s == NULL) return;
 
-    if (c >= '1' && c <= '4') {
+    if (c >= '1' && c <= '5') {
         s->tab = c - '1';
         return;
     }
@@ -261,7 +309,7 @@ static void settings_key(struct window *win, char c)
     case '\n': {
         if (s->tab == 2) {
             /* clicked reboot/shutdown area approximated by Enter on tab 2 */
-            set_msg(s, "reboot/shutdown not wired to ACPI yet");
+            acpi_poweroff();
             return;
         }
         if (s->tab == 3) {
